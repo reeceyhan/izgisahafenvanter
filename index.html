@@ -1022,5 +1022,75 @@ document.addEventListener('keydown',e=>{
 
 loadBooks();
 </script>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  setDoc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAxwoGXom3-eIc7lbi9zZ06dxuYcO8tlco",
+  authDomain: "izgisahafenvanter.firebaseapp.com",
+  projectId: "izgisahafenvanter",
+  storageBucket: "izgisahafenvanter.firebasestorage.app",
+  messagingSenderId: "478092859643",
+  appId: "1:478092859643:web:9b33949d5a222e289fb85e",
+  measurementId: "G-REFBZDNZXX"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+window.db = db;
+window.collection = collection;
+window.addDoc = addDoc;
+window.getDocs = getDocs;
+
+window.storageGet = async function(){
+  try {
+    const ref = doc(db, "appData", "books");
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      return snap.data().list || [];
+    }
+
+    return [];
+  } catch (e) {
+    console.error("Firestore GET hata:", e);
+    return [];
+  }
+};
+
+window.storageSet = async function(data){
+  try {
+    const ref = doc(db, "appData", "books");
+
+    await setDoc(ref, {
+      list: data,
+      updatedAt: Date.now()
+    });
+
+    return true;
+  } catch (e) {
+    console.error("Firestore SET hata:", e);
+    return false;
+  }
+};
+
+if (typeof loadBooks === "function") {
+  loadBooks();
+}
+
+</script>
 </body>
 </html>
