@@ -965,8 +965,21 @@ function closeDetail(){
 function editFromDetail(){const id=currentDetailId;closeDetail();openEditModal(id);}
 async function deleteFromDetail(){
   if(!confirm('Bu kitabı silmek istediğinize emin misiniz?'))return;
-  books=books.filter(x=>x.id!==currentDetailId);
-  await saveBooks();closeDetail();applyFilters();updateStats();
+
+  const deletingId = currentDetailId;
+
+  books = books.filter(x => x.id !== deletingId);
+
+  if (window.deleteBookFromFirestore) {
+    await window.deleteBookFromFirestore(deletingId);
+  } else {
+    await saveBooks();
+  }
+
+  closeDetail();
+  applyFilters();
+  updateStats();
+
   showNotification('Kitap silindi.','success');
 }
 
@@ -1034,8 +1047,9 @@ import {
   getDocs,
   doc,
   setDoc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+  getDoc,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAxwoGXom3-eIc7lbi9zZ06dxuYcO8tlco",
@@ -1055,34 +1069,75 @@ window.collection = collection;
 window.addDoc = addDoc;
 window.getDocs = getDocs;
 
+function makeBookId(){
+  return 'b' + Date.now() + Math.random().toString(36).slice(2, 8);
+}
+
 window.storageGet = async function(){
   try {
-    const ref = doc(db, "appData", "books");
-    const snap = await getDoc(ref);
+    const qs = await getDocs(collection(db, "books"));
+    const list = [];
 
-    if (snap.exists()) {
-      return snap.data().list || [];
+    qs.forEach((snap) => {
+      list.push(snap.data());
+    });
+
+    if (list.length > 0) {
+      list.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      return list;
+    }
+
+    const oldRef = doc(db, "appData", "books");
+    const oldSnap = await getDoc(oldRef);
+
+    if (oldSnap.exists()) {
+      const oldList = oldSnap.data().list || [];
+
+      if (oldList.length > 0) {
+        await window.storageSet(oldList);
+        oldList.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+        return oldList;
+      }
     }
 
     return [];
   } catch (e) {
-    console.error("Firestore GET hata:", e);
+    console.error("Firestore kitap okuma hata:", e);
     return [];
   }
 };
 
 window.storageSet = async function(data){
   try {
-    const ref = doc(db, "appData", "books");
+    const list = Array.isArray(data) ? data : [];
 
-    await setDoc(ref, {
-      list: data,
-      updatedAt: Date.now()
+    const ops = list.map((book) => {
+      const cleanBook = {
+        ...book,
+        id: book.id || makeBookId(),
+        photos: Array.isArray(book.photos)
+          ? book.photos.filter(p => typeof p === "string" && p.startsWith("http"))
+          : []
+      };
+
+      return setDoc(doc(db, "books", cleanBook.id), cleanBook);
     });
+
+    await Promise.all(ops);
 
     return true;
   } catch (e) {
-    console.error("Firestore SET hata:", e);
+    console.error("Firestore kitap kaydetme hata:", e);
+    return false;
+  }
+};
+
+window.deleteBookFromFirestore = async function(bookId){
+  try {
+    await deleteDoc(doc(db, "books", bookId));
+    return true;
+  } catch (e) {
+    console.error("Firestore kitap silme hata:", e);
     return false;
   }
 };
@@ -1090,7 +1145,6 @@ window.storageSet = async function(data){
 if (typeof loadBooks === "function") {
   loadBooks();
 }
-
 </script>
 </body>
 </html>
